@@ -3,6 +3,7 @@ import Post from '../../models/post';
 import mongoose from 'mongoose';
 import Router from 'koa-router';
 import Joi from 'joi';
+import sanitizeHtml from 'sanitize-html';
 
 const { ObjectId } = mongoose.Types;
 
@@ -80,6 +81,14 @@ export const write = async (ctx: Router.IRouterContext) => {
   GET /api/posts?username=&tag=&page=
 */
 
+const removeHtmlAndShorten = (body: any) => {
+  const filtered = sanitizeHtml(body, {
+    allowedTags: [],
+  });
+
+  return filtered.length < 200 ? filtered : `${filtered.slice(0, 200)}...`;
+};
+
 export const list = async (ctx: Router.IRouterContext) => {
   const page = parseInt((ctx.query.page as string) || '1', 10);
 
@@ -102,7 +111,20 @@ export const list = async (ctx: Router.IRouterContext) => {
       .exec();
     const postCount = await Post.countDocuments(query).exec();
     ctx.set('Last-Page', String(Math.ceil(postCount / 10)));
-    ctx.body = posts;
+    ctx.body = posts.map((item) => {
+      return {
+        user: {
+          _id: item.user._id,
+          username: item.user.username,
+        },
+        _id: item._id,
+        title: item.title,
+        body: removeHtmlAndShorten(item.body),
+        tags: item.tags,
+        publishedDate: item.publishedDate,
+        __v: item.__v,
+      };
+    });
   } catch (e) {
     if (e instanceof Error) {
       ctx.throw(e.message, 500);
