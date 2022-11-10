@@ -6,6 +6,30 @@ import Joi from 'joi';
 import sanitizeHtml from 'sanitize-html';
 
 const { ObjectId } = mongoose.Types;
+const sanitizeOption: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'h1',
+    'h2',
+    'b',
+    'i',
+    'u',
+    's',
+    'u',
+    'p',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'a',
+    'img',
+  ],
+  allowedAttributes: {
+    a: ['href', 'name', 'target'],
+    img: ['src'],
+    li: ['class'],
+  },
+  allowedSchemes: ['data', 'http'],
+};
 
 export const getPostById = async (
   ctx: Router.IRouterContext,
@@ -61,7 +85,7 @@ export const write = async (ctx: Router.IRouterContext) => {
   const { body, tags, title } = <TPost>ctx.request.body;
   const post = new Post({
     title,
-    body,
+    body: sanitizeHtml(body, sanitizeOption),
     tags,
     user: ctx.state.user,
   });
@@ -110,7 +134,7 @@ export const list = async (ctx: Router.IRouterContext) => {
       .skip((page - 1) * 10)
       .exec();
     const postCount = await Post.countDocuments(query).exec();
-    ctx.set('Last-Page', String(Math.ceil(postCount / 10)));
+    ctx.set('Last_Page', String(Math.ceil(postCount / 10)));
     ctx.body = posts.map((item) => {
       return {
         user: {
@@ -149,7 +173,6 @@ export const read = async (ctx: Router.IRouterContext) => {
 
 export const remove = async (ctx: Router.IRouterContext) => {
   const { id } = ctx.params;
-  console.log(id);
   try {
     await Post.findByIdAndRemove(id).exec();
     ctx.status = 204;
@@ -186,10 +209,16 @@ export const update = async (ctx: Router.IRouterContext) => {
     return;
   }
 
+  const nextData: Record<string, unknown> | undefined = { ...ctx.request.body };
+  if (nextData.body) {
+    nextData.body = sanitizeHtml(nextData.body as string, sanitizeOption);
+  }
+
   try {
-    const post = await Post.findByIdAndUpdate(id, ctx.request.body, {
+    const post = await Post.findByIdAndUpdate(id, nextData, {
       new: true,
     }).exec();
+    console.log(post);
     if (!post) {
       ctx.status = 404;
       return;
